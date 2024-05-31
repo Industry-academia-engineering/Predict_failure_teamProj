@@ -46,11 +46,11 @@ summary(dat)
 dat <- dat[,-c(1,2)]
 colnames(dat)
 
-# 결측치 확인 (True : 결측치, False : 정상)
-table(is.na(dat))
-
 # 변수 Type 변경
 dat$Target <- as.character(dat$Target)
+
+# 결측치 확인 (True : 결측치, False : 정상)
+table(is.na(dat))
 
 # 데이터 시각화
 library(ggplot2)
