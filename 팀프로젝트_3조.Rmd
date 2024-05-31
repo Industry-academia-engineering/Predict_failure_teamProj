@@ -1,0 +1,118 @@
+---
+title: "팀프로젝트_3조"
+author: "LSH"
+date: "2024-05-30"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## [데이터 분석 개요]
+### 1. 대상 데이터: 밀링 기계 데이터셋
+(https://www.kaggle.com/datasets/shivamb/machine-predictive-maintenance-classification)
+
+- UID : 1~10000 범위의 고유 식별자
+- product ID : 제품 일련번호
+- Type : 제품 품질 (H, M, L)
+- Air temperature : 
+- Process temperature :
+- Rotational speed : RPM
+- Torque : 토그 값
+- Tool wear : Tool 마모(사용시간), 생산된 제품 품질마다 시간 구분 (H:5min, M:3min, L:2min)
+- Target : Failure or Not
+- Failure Type : Tpye of Failure
+
+<br>
+<br>
+<br>
+
+### 1. 데이터 탐색 (EDA) 및 전처리
+```{r preprocess}
+dat <- read.csv('predictive_maintenance.csv')
+str(dat)
+
+# column 이름 변경
+colnames(dat) <- gsub('[.]','_',colnames(dat))
+colnames(dat) <- gsub('_+','_',colnames(dat))
+colnames(dat) <- gsub('_$','',colnames(dat))
+colnames(dat)
+
+# 데이터 요약 정보
+summary(dat)
+
+# UID, ProductID 변수 삭제
+dat <- dat[,-c(1,2)]
+colnames(dat)
+
+# 결측치 확인 (True : 결측치, False : 정상)
+table(is.na(dat))
+
+# 변수 Type 변경
+dat$Target <- as.character(dat$Target)
+
+# 데이터 시각화
+library(ggplot2)
+library(gridExtra)
+library(dplyr)
+
+# Type Column Data
+table(dat$Type)
+
+type_counts <- dat %>% 
+  count(Type) %>% 
+  mutate(perc = n / sum(n) * 100)
+
+ggplot(type_counts, aes(x = "", y = perc, fill = Type)) +
+  geom_bar(stat = "identity", width = 1) +
+  coord_polar("y", start = 0) +
+  theme_void() +
+  geom_text(aes(label = paste0(round(perc, 1), "%")), 
+            position = position_stack(vjust = 0.5)) +
+  ggtitle("Type Distribution") +
+  theme(plot.title = element_text(hjust = 0.5))
+
+# Target & Failure Type Column Data (0 : No Fail, 1 : Fail)
+table(dat$Target)
+table(dat$Failure_Type)
+
+# Target Column의 0(No Fail) 갯수와 Failure_type Column의 No Failure 갯수 차이 존재.
+# 이상치 제거 (Target 값과 Failure Type의 내용과 일치하지 않는 데이터 제거)
+# 'Target'이 1이면서 'FailureType'이 'No Failure'인 행 제거
+dat <- dat[!(dat$Target == "1" & dat$Failure_Type == "No Failure"),]
+# 'Target'이 0이면서 'FailureType'이 'No Failure'가 아닌 행 제거
+dat <- dat[!(dat$Target == "0" & dat$Failure_Type != "No Failure"),]
+
+# 이상치 제거 여부 확인
+table(dat$Target)
+table(dat$Failure_Type)
+
+# Failure Type Column Data
+F_type_counts <- dat %>% 
+  filter(Failure_Type != "No Failure") %>%
+  count(Failure_Type) %>% 
+  mutate(perc = n / sum(n) * 100)
+
+ggplot(F_type_counts, aes(x = "", y = perc, fill = Failure_Type)) +
+  geom_bar(stat = "identity", width = 1) +
+  coord_polar("y", start = 0) +
+  theme_void() +
+  geom_text(aes(label = paste0(round(perc, 1), "%")), 
+            position = position_stack(vjust = 0.5)) +
+  ggtitle("Failure Type Distribution") +
+  theme(plot.title = element_text(hjust = 0.5))
+
+# Numerical, Integer Column 시각화
+visualize <- function(x){
+    ggplot() + geom_histogram(aes(x), color="white")
+}
+
+g_air_temp <- visualize(dat[,2]) + xlab(colnames(dat)[2])
+g_proc_temp <- visualize(dat[,3]) + xlab(colnames(dat)[3])
+g_rpm <- visualize(dat[,4]) + xlab(colnames(dat)[4])
+g_torq <- visualize(dat[,5]) + xlab(colnames(dat)[5])
+g_tool_wear <- visualize(dat[,6]) + xlab(colnames(dat)[6])
+
+grid.arrange(g_air_temp, g_proc_temp, g_rpm, g_torq, g_tool_wear, ncol = 3)
+```
