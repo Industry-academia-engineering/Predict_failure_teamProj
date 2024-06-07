@@ -223,24 +223,206 @@ summary(anova_tw)
   theme_minimal() }
 
 
+
+## 2. 양호/고장발생 그룹간 차이 분석
+
+# 가설설정 - Air_temperature의 평균
+# H0: 양호/고장발생 그룹간 Air_temperature의 평균이 같다.
+# H1: 양호/고장발생 그룹간 Air_temperature의 평균이 다르다.
+
+# Target 그룹별 Air_temperature 데이터 분리
+airtemp_0 <- subset(dat, Target == 0)$Air_temperature_K
+airtemp_1 <- subset(dat, Target == 1)$Air_temperature_K
+
+# 두 그룹 간 평균 비교 (t-검정)
+t_test_airtemp <- t.test(airtemp_0, airtemp_1)
+print(t_test_airtemp)
+
+# p-value가 유의수준인 0.05보다 작으므로 귀무가설 기각(대립가설 채택)
+# => 그룹간 평균에 유의미한 차이가 있음
+
+# 가설설정 - Air_temperature의 분산
+# H0: 양호/고장발생 그룹간 Air_temperature의 분산에 차이가 없다.
+# H1: 양호/고장발생 그룹간 Air_temperature의 분산에 차이가 있다.
+
+# 두 그룹 간 분산 비교 (F-검정)
+f_test_airtemp <- var.test(airtemp_0, airtemp_1)
+print(f_test_airtemp)
+
+# p-value가 유의수준인 0.05보다 크므로 귀무가설 기각 불가
+# => 그룹간 분산에는 유의한 차이가 없음
+
+# 고장 발생 여부별 분포 시각화(Boxplot)
+
+{ ggplot(dat, aes(x = Target, y = Air_temperature_K)) +
+  geom_boxplot() +
+  labs(title = "Box Plot of Air temperature by Target",
+       x = "Type",
+       y = "Air temperature (K)") +
+  theme_minimal() }
+
+
+# 가설설정 - Process_temperature의 평균
+# H0: 양호/고장발생 그룹간 Process_temperature의 평균이 같다.
+# H1: 양호/고장발생 그룹간 Process_temperature의 평균이 다르다.
+
+# Target 그룹별 Process_temperature 데이터 분리
+processtemp_0 <- subset(dat, Target == 0)$Process_temperature_K
+processtemp_1 <- subset(dat, Target == 1)$Process_temperature_K
+
+# 두 그룹 간 평균 비교 (t-검정)
+t_test_processtemp <- t.test(processtemp_0, processtemp_1)
+print(t_test_processtemp)
+
+# p-value가 유의수준인 0.05보다 작으므로 귀무가설 기각(대립가설 채택)
+# => 그룹간 평균에 유의미한 차이가 있음
+
+# 가설설정 - Process_temperature의 분산
+# H0: 양호/고장발생 그룹간 Process_temperature의 분산에 차이가 없다.
+# H1: 양호/고장발생 그룹간 Process_temperature의 분산에 차이가 있다.
+
+# 두 그룹 간 분산 비교 (F-검정)
+f_test_processtemp <- var.test(processtemp_0, processtemp_1)
+print(f_test_processtemp)
+
+# p-value가 유의수준인 0.05보다 작으므로 귀무가설 기각(대립가설 채택)
+# => 그룹간 분산에 유의미한 차이가 있음
+
+# 고장 발생 여부별 분포 시각화(Boxplot)
+
+{ ggplot(dat, aes(x = Target, y = Process_temperature_K)) +
+  geom_boxplot() +
+  labs(title = "Box Plot of Process temperature by Target",
+       x = "Type",
+       y = "Process temperature (K)") +
+  theme_minimal() }
+
+
+# 가설설정 - Rotational_speed의 평균
+# H0: 양호/고장발생 그룹간 Rotational_speed의 평균이 같다.
+# H1: 양호/고장발생 그룹간 Rotational_speed의 평균이 다르다.
+
+# Target 그룹별 Rotational_speed 데이터 분리
+rot_0 <- subset(dat, Target == 0)$Rotational_speed_rpm
+rot_1 <- subset(dat, Target == 1)$Rotational_speed_rpm
+
+# 두 그룹 간 평균 비교 (t-검정)
+t_test_rot <- t.test(rot_0, rot_1)
+print(t_test_rot)
+
+# p-value가 유의수준인 0.05보다 작으므로 귀무가설 기각(대립가설 채택)
+# => 그룹간 평균에 유의미한 차이가 있음
+
+# 가설설정 - Rotational_speed의 분산
+# H0: 양호/고장발생 그룹간 Rotational_speed의 분산에 차이가 없다.
+# H1: 양호/고장발생 그룹간 Rotational_speed의 분산에 차이가 있다.
+
+# 두 그룹 간 분산 비교 (F-검정)
+f_test_rot <- var.test(rot_0, rot_1)
+print(f_test_rot)
+
+# p-value가 유의수준인 0.05보다 작으므로 귀무가설 기각(대립가설 채택)
+# => 그룹간 분산에 유의미한 차이가 있음
+
+# 고장 발생 여부별 분포 시각화(Boxplot)
+
+{ ggplot(dat, aes(x = Target, y = Rotational_speed_rpm)) +
+  geom_boxplot() +
+  labs(title = "Box Plot of Rotational speed by Target",
+       x = "Type",
+       y = "Rotational speed (RPM)") +
+  theme_minimal() }
+
+
+# 가설설정 - Torque의 평균
+# H0: 양호/고장발생 그룹간 Torque의 평균이 같다.
+# H1: 양호/고장발생 그룹간 Torque의 평균이 다르다.
+
+# Target 그룹별 Torque 데이터 분리
+torque_0 <- subset(dat, Target == 0)$Torque_Nm
+torque_1 <- subset(dat, Target == 1)$Torque_Nm
+
+# 두 그룹 간 평균 비교 (t-검정)
+t_test_torque <- t.test(torque_0, torque_1)
+print(t_test_torque)
+
+# p-value가 유의수준인 0.05보다 작으므로 귀무가설 기각(대립가설 채택)
+# => 그룹간 평균에 유의미한 차이가 있음
+
+# 가설설정 - Torque의 분산
+# H0: 양호/고장발생 그룹간 Torque의 분산에 차이가 없다.
+# H1: 양호/고장발생 그룹간 Torque의 분산에 차이가 있다.
+
+# 두 그룹 간 분산 비교 (F-검정)
+f_test_torque <- var.test(torque_0, torque_1)
+print(f_test_torque)
+
+# p-value가 유의수준인 0.05보다 작으므로 귀무가설 기각(대립가설 채택)
+# => 그룹간 분산에 유의미한 차이가 있음
+
+# 고장 발생 여부별 분포 시각화(Boxplot)
+
+{ ggplot(dat, aes(x = Target, y = Torque_Nm)) +
+  geom_boxplot() +
+  labs(title = "Box Plot of Torque by Target",
+       x = "Type",
+       y = "Torque (Nm)") +
+  theme_minimal() }
+
+
+# 가설설정 - Tool wear의 평균
+# H0: 양호/고장발생 그룹간 Tool wear의 평균이 같다.
+# H1: 양호/고장발생 그룹간 Tool wear의 평균이 다르다.
+
+# Target 그룹별 Tool wear 데이터 분리
+tw_0 <- subset(dat, Target == 0)$Tool_wear_min
+tw_1 <- subset(dat, Target == 1)$Tool_wear_min
+
+# 두 그룹 간 평균 비교 (t-검정)
+t_test_tw <- t.test(tw_0, tw_1)
+print(t_test_tw)
+
+# p-value가 유의수준인 0.05보다 작으므로 귀무가설 기각(대립가설 채택)
+# => 그룹간 평균에 유의미한 차이가 있음
+
+# 가설설정 - Tool wear의 분산
+# H0: 양호/고장발생 그룹간 Tool wear의 분산에 차이가 없다.
+# H1: 양호/고장발생 그룹간 Tool wear의 분산에 차이가 있다.
+
+# 두 그룹 간 분산 비교 (F-검정)
+f_test_tw <- var.test(tw_0, tw_1)
+print(f_test_tw)
+
+# p-value가 유의수준인 0.05보다 작으므로 귀무가설 기각(대립가설 채택)
+# => 그룹간 분산에 유의미한 차이가 있음
+
+# 고장 발생 여부별 분포 시각화(Boxplot)
+
+{ ggplot(dat, aes(x = Target, y = Tool_wear_min)) +
+  geom_boxplot() +
+  labs(title = "Box Plot of Tool wear by Target",
+       x = "Type",
+       y = "Tool wear") +
+  theme_minimal() }
+
 ```
 
 ### 3. 모델 생성
 ```{r model}
 
-## 2. 각 변수별 상관관계 확인 및 주성분 추출
+## 1. 각 변수별 상관관계 확인 및 주성분 추출
 
 # 변수간 상관계수 도출(히트맵)
 
 
-## 3. 고장 예측(+유형 분류) 모델 제작
+## 2. 고장 예측(+유형 분류) 모델 제작
 
-# 3-1. Random Forest
+# 2-1. Random Forest
 
-# 3-2. SVM
+# 2-2. SVM
 
-# 3-3. ???
+# 2-3. ???
 
 
-## 4. 모델 평가 및 개선
+## 3. 모델 평가 및 개선
 
