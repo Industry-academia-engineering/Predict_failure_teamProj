@@ -116,3 +116,131 @@ g_tool_wear <- visualize(dat[,6]) + xlab(colnames(dat)[6])
 
 grid.arrange(g_air_temp, g_proc_temp, g_rpm, g_torq, g_tool_wear, ncol = 3)
 ```
+### 2. 가설 설정 및 검정
+```{r hypothesis}
+
+## 1. 제품 별 품질타입 L,M,H(각각 50,30,20%)의 차이 분석
+
+# 가설설정 - Air_temperature의 평균
+# H0: L, M, H 타입간 Air_temperature의 평균에 차이가 없다.
+# H1: L, M, H 타입간 Air_temperature의 평균에 차이가 있다.
+
+# 3수준 이상이므로 ANOVA 활용
+
+anova_air <- aov(Air_temperature_K ~ Type, data = dat)
+summary(anova_air)
+
+# p-value가 유의수준인 0.05보다 크므로 귀무가설 기각 불가
+# => 평균 차이가 유의하지 않음
+
+# 타입별 분포 시각화(Boxplot)
+{ ggplot(dat, aes(x = Type, y = Air_temperature_K)) +
+  geom_boxplot() +
+  labs(title = "Box Plot of Air Temperature by Type",
+       x = "Type",
+       y = "Air Temperature (K)") +
+  theme_minimal() }
+
+
+
+# 가설설정 - Process_temperature의 평균
+# H0: L, M, H 타입간 Process_temperature의 평균에 차이가 없다.
+# H1: L, M, H 타입간 Process_temperature의 평균에 차이가 있다.
+
+anova_process <- aov(Process_temperature_K ~ Type, data = dat)
+summary(anova_process)
+
+# p-value가 유의수준인 0.05보다 크므로 귀무가설 기각 불가
+# => 평균 차이가 유의하지 않음
+
+# 타입별 분포 시각화(Boxplot)
+{ ggplot(dat, aes(x = Type, y = Process_temperature_K)) +
+  geom_boxplot() +
+  labs(title = "Box Plot of Process Temperature by Type",
+       x = "Type",
+       y = "Process Temperature (K)") +
+  theme_minimal() }
+
+
+
+# 가설설정 - Rotational_speed의 평균
+# H0: L, M, H 타입간 Rotational_speed의 평균에 차이가 없다.
+# H1: L, M, H 타입간 Rotational_speed의 평균에 차이가 있다.
+
+anova_rot <- aov(Rotational_speed_rpm ~ Type, data = dat)
+summary(anova_rot)
+
+# p-value가 유의수준인 0.05보다 크므로 귀무가설 기각 불가
+# => 평균 차이가 유의하지 않음
+
+# 타입별 분포 시각화(Boxplot)
+{ ggplot(dat, aes(x = Type, y = Rotational_speed_rpm)) +
+  geom_boxplot() +
+  labs(title = "Box Plot of Rotational speed by Type",
+       x = "Type",
+       y = "Rotational speed (RPM)") +
+  theme_minimal() }
+
+# => ㅣ타입의 군내 수가 많아서 이상치 수 또한 많은 것으로 보임. 향후 추가 분석 필요
+
+
+
+# 가설설정 - Torque의 평균
+# H0: L, M, H 타입간 Torque의 평균에 차이가 없다.
+# H1: L, M, H 타입간 Torque의 평균에 차이가 있다.
+
+anova_torque <- aov(Torque_Nm ~ Type, data = dat)
+summary(anova_torque)
+
+# p-value가 유의수준인 0.05보다 크므로 귀무가설 기각 불가
+# => 평균 차이가 유의하지 않음
+
+# 타입별 분포 시각화(Boxplot)
+{ ggplot(dat, aes(x = Type, y = Torque_Nm)) +
+  geom_boxplot() +
+  labs(title = "Box Plot of Torque by Type",
+       x = "Type",
+       y = "Torque (Nm)") +
+  theme_minimal() }
+
+
+# 가설설정 - Tool_wear의 평균
+# H0: L, M, H 타입간 Tool_wear의 평균에 차이가 없다.
+# H1: L, M, H 타입간 Tool_wear의 평균에 차이가 있다.
+
+anova_tw <- aov(Tool_wear_min ~ Type, data = dat)
+summary(anova_tw)
+
+# p-value가 유의수준인 0.05보다 크므로 귀무가설 기각 불가
+# => 평균 차이가 유의하지 않음
+
+# 타입별 분포 시각화(Boxplot)
+{ ggplot(dat, aes(x = Type, y = Tool_wear_min)) +
+  geom_boxplot() +
+  labs(title = "Box Plot of Tool wear by Type",
+       x = "Type",
+       y = "Tool wear") +
+  theme_minimal() }
+
+
+```
+
+### 3. 모델 생성
+```{r model}
+
+## 2. 각 변수별 상관관계 확인 및 주성분 추출
+
+# 변수간 상관계수 도출(히트맵)
+
+
+## 3. 고장 예측(+유형 분류) 모델 제작
+
+# 3-1. Random Forest
+
+# 3-2. SVM
+
+# 3-3. ???
+
+
+## 4. 모델 평가 및 개선
+
