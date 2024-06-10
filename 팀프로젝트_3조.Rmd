@@ -410,12 +410,92 @@ print(f_test_tw)
 ### 3. 모델 생성
 ```{r model}
 
+
 ## 1. 각 변수별 상관관계 확인 및 주성분 추출
+
+```{r correlation}
+library(corrplot)
+# 피어슨 상관계수: 선형적인 관계를 정량적으로 측정
+# 수치형 변수만 dat1 변수에 저장
+
+# 수치형 변수들 산점도
+dat1 <- dat[,2:6]
+plot(dat1)
+
+# 상관계수 테이블 생성
+corr <- cor(dat1, method = "pearson")
+
+# 상관계수 테이블 시각화
+col <- colorRampPalette(c("red", "blue"))
+corrplot(corr, method="color", col=col(200),
+         type="upper", addCoef.col = "black")
+```
+
+
+```{r regression}
+# 다중회귀모델 적합 (y:고장여부, x:수치형 변수들)
+dat$Target <- as.numeric(dat$Target)
+fit <- lm(Target~Air_temperature_K+Process_temperature_K+Rotational_speed_rpm+Torque_Nm+Tool_wear_min, data=dat)
+summary(fit)
+
+# F-test에 대한 p-value < 2.2e-16이므로 모형이 유의함을 확인할 수 있음
+# 변수들의 p-value가 모두 0.05 미만이므로 모든 수치형 변수가 고장 여부에 대해서 유의미한 선형관계가 있음
+
+# 다중공선성 확인
+library(car)
+vif(fit)
+# VIF가 10을 넘지 않으므로 다중공선성이 없음
+
+par(mfrow=c(2,2))
+plot(fit)
+
+# Q-Q plot 오른쪽 부분은 정규분포를 따르지 않는 것이 확인됨
+qqPlot(fit, main="Q-Q Plot")
+
+```
 
 # 변수간 상관계수 도출(히트맵)
 
-
 ## 2. 고장 예측(+유형 분류) 모델 제작
+
+```{classify_model}
+
+# 랜덤 포레스트 모델 학습
+model_rf <- randomForest(Target ~ Air_temperature_K + Process_temperature_K + 
+                         Rotational_speed_rpm + Torque_Nm + Tool_wear_min + Type,
+                         data = datTrain, importance = TRUE)
+# 모델 요약
+print(model_rf)
+
+# 모델 예측
+predictions <- predict(model_rf, newdata = datTest)
+
+# 혼동 행렬 생성
+confMat <- confusionMatrix(predictions, datTest$Target)
+print(confMat)
+
+# 변수 중요도 시각화
+varImpPlot(model_rf)
+
+# 모델 튜닝 (필요시)
+control <- trainControl(method="repeatedcv", number=10, repeats=3)
+tuneGrid <- expand.grid(.mtry=c(2:5))
+
+rf_tuned <- train(Target ~ Air_temperature_K + Process_temperature_K + 
+                  Rotational_speed_rpm + Torque_Nm + Tool_wear_min + Type,
+                  data = datTrain, method = "rf", trControl = control, tuneGrid = tuneGrid)
+
+# 최적 모델 확인
+print(rf_tuned)
+
+# 최적 모델로 예측 및 평가
+predictions_tuned <- predict(rf_tuned, newdata = datTest)
+confMat_tuned <- confusionMatrix(predictions_tuned, datTest$Target)
+print(confMat_tuned)
+
+
+```
+
 
 # 2-1. Random Forest
 
