@@ -460,18 +460,51 @@ qqPlot(fit, main="Q-Q Plot")
 
 ```{classify_model}
 
+library(kernlab)
+library(e1071)
+
+# 모델 학습
+train_control <- trainControl(method = "cv", number = 10) 
+
+svm_grid <- expand.grid(.C = c(0.1, 1, 10), .sigma = c(0.01, 0.05, 0.1)) #hyperparameter
+svr <- train(Failure_Type ~ ., data = trainsc1, method = 'svmRadial',
+ trControl = train_control, tuneGrid = svm_grid) 
+
+# 학습 결과
+svr$finalModel
+
+# 성능평가
+pred_svr <- predict(svr$finalModel, as.matrix(testsc1[, -ncol(testsc1)]))
+
+evaluate(testsc1$Failure_Type, pred_svr)
+
+
+
+# 2-3. Random Forest
+# 고장 예측 모델
+library(randomForest)
+
+# 수치형 -> 범주형
+trainsc1$Type <- as.factor(trainsc1$Type)
+trainsc1$Target <- as.factor(trainsc1$Target)
+trainsc1$Failure_Type <- as.factor(trainsc1$Failure_Type)
+testsc1$Type <- as.factor(testsc1$Type)
+testsc1$Target <- as.factor(testsc1$Target)
+testsc1$Failure_Type <- as.factor(testsc1$Failure_Type)
+
 # 랜덤 포레스트 모델 학습
 model_rf <- randomForest(Target ~ Air_temperature_K + Process_temperature_K + 
-                         Rotational_speed_rpm + Torque_Nm + Tool_wear_min + Type,
-                         data = datTrain, importance = TRUE)
+                         Rotational_speed_rpm + Torque_Nm + Tool_wear_min + Type + Failure_Type,
+                         data = trainsc1, importance = TRUE)
+
 # 모델 요약
 print(model_rf)
 
 # 모델 예측
-predictions <- predict(model_rf, newdata = datTest)
+predictions <- predict(model_rf, newdata = testsc1)
 
 # 혼동 행렬 생성
-confMat <- confusionMatrix(predictions, datTest$Target)
+confMat <- confusionMatrix(predictions, testsc1$Target)
 print(confMat)
 
 # 변수 중요도 시각화
@@ -482,17 +515,15 @@ control <- trainControl(method="repeatedcv", number=10, repeats=3)
 tuneGrid <- expand.grid(.mtry=c(2:5))
 
 rf_tuned <- train(Target ~ Air_temperature_K + Process_temperature_K + 
-                  Rotational_speed_rpm + Torque_Nm + Tool_wear_min + Type,
-                  data = datTrain, method = "rf", trControl = control, tuneGrid = tuneGrid)
+                  Rotational_speed_rpm + Torque_Nm + Tool_wear_min + Type + Failure_Type,
+                  data = trainsc1, method = "rf", trControl = control, tuneGrid = tuneGrid)
 
 # 최적 모델 확인
 print(rf_tuned)
 
 # 최적 모델로 예측 및 평가
-predictions_tuned <- predict(rf_tuned, newdata = datTest)
-confMat_tuned <- confusionMatrix(predictions_tuned, datTest$Target)
-print(confMat_tuned)
-
+predictions_tuned <- predict(rf_tuned, newdata = testsc1)
+confMat_tuned <- confusio
 
 ```
 
@@ -503,6 +534,4 @@ print(confMat_tuned)
 
 # 2-3. ???
 
-
 ## 3. 모델 평가 및 개선
-
