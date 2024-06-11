@@ -503,14 +503,9 @@ testsc1$Failure_Type <- as.factor(testsc1$Failure_Type)
 
 # 랜덤 포레스트 모델 학습
 model_rf <- randomForest(Target ~ Air_temperature_K + Process_temperature_K + 
-<<<<<<< HEAD
                          Rotational_speed_rpm + Torque_Nm + Tool_wear_min + Type + Failure_Type,
                          data = trainsc1, importance = TRUE)
 
-=======
-                         Rotational_speed_rpm + Torque_Nm + Tool_wear_min + Type,
-                         data = dat, importance = TRUE)
->>>>>>> 37479558b6ad4452e372d135d61a8c3a5ad8985b
 # 모델 요약
 print(model_rf)
 
