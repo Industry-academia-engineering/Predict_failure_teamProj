@@ -56,7 +56,6 @@ table(is.na(dat))
 library(ggplot2)
 library(gridExtra)
 library(dplyr)
-install.packages("dplyr")
 
 # Type Column Data
 table(dat$Type)
@@ -410,77 +409,242 @@ print(f_test_tw)
 
 ### 3. 모델 생성
 ```{r model}
+# 범주형 데이터 -> 수치형 데이터로 
+dat$Type <- as.numeric(factor(dat$Type))
+dat$Target <- as.numeric(factor(dat$Target))
+dat$Failure_Type <- as.numeric(factor(dat$Failure_Type))
+unique(dat$Failure_Type)
+unique(dat$Target)
+unique(dat$Type)
 
 
-## 1. 각 변수별 상관관계 확인 및 주성분 추출
+library(caret)
 
-library(corrplot)
-install.packages("corrplot")
-# 피어슨 상관계수: 선형적인 관계를 정량적으로 측정
-# 수치형 변수만 dat1 변수에 저장
+# 트레인, 테스트셋 분할
+set.seed(0)
+trainidx <- sample(1:nrow(dat), 0.7*nrow(dat))
+trainset <- dat[trainidx,]
+testset <- dat[-trainidx,]
 
-# 수치형 변수들 산점도
-dat1 <- dat[,2:6]
-plot(dat1)
+# 표준화
+# Target과 Failure_Type 종속 변수로 설정
+depidx <- (ncol(trainset)-1):ncol(trainset)
+scaling <- preProcess(trainset[, -depidx], method = c("center", "scale"))
 
-# 상관계수 테이블 생성
-corr <- cor(dat1, method = "pearson")
+traintarget <- trainset[,depidx]
+trainsc <- predict(scaling, trainset[, -depidx])
+trainsc <- cbind(trainsc, traintarget)
 
-# 상관계수 테이블 시각화
-col <- colorRampPalette(c("red", "blue"))
-corrplot(corr, method="color", col=col(200),
-         type="upper", addCoef.col = "black")
-```
+testtarget <- testset[,depidx]
+testsc <- predict(scaling, testset[, -depidx])
+testsc <- cbind(testsc, testtarget)
 
-
-```{r regression}
-# 다중회귀모델 적합 (y:고장여부, x:수치형 변수들)
-dat$Target <- as.numeric(dat$Target)
-fit <- lm(Target~Air_temperature_K+Process_temperature_K+Rotational_speed_rpm+Torque_Nm+Tool_wear_min, data=dat)
-summary(fit)
-
-# F-test에 대한 p-value < 2.2e-16이므로 모형이 유의함을 확인할 수 있음
-# 변수들의 p-value가 모두 0.05 미만이므로 모든 수치형 변수가 고장 여부에 대해서 유의미한 선형관계가 있음
-
-# 다중공선성 확인
-library(car)
-vif(fit)
-# VIF가 10을 넘지 않으므로 다중공선성이 없음
-
-par(mfrow=c(2,2))
-plot(fit)
-
-# Q-Q plot 오른쪽 부분은 정규분포를 따르지 않는 것이 확인됨
-qqPlot(fit, main="Q-Q Plot")
-
-```
+# 상관 행렬 계산 및 시각화
+numeric_columns <- sapply(trainsc, is.numeric)
+trainsc1 <- trainsc[, numeric_columns]
+testsc1 <- testsc[, numeric_columns]
+colnames(trainsc)
 
 # 변수간 상관계수 도출(히트맵)
+library(corrplot)
+par(mfrow=c(1,1))
+corr <- cor(trainsc1, method='pearson')
+col <- colorRampPalette(c('white','blue'))
+corrplot(abs(corr), method='color', col=col(200), type='upper',tl.cex = 0.5, tl.col='black')
+
+# 2. 특징 추출 및 차원 축소
+
+
+# PCA 
+
+pca1 <- prcomp(trainsc1[, -ncol(trainsc1)])
+summary(pca1) #최적 주성분 4개
+
+pca1 <- preProcess(trainsc1[, -ncol(trainsc1)], method = 'pca')
+trainpca1 <- predict(pca1, trainsc1[,-ncol(trainsc1)])[,1:4]
+trainpca1 <- cbind(trainpca1, trainsc[, c('Target', 'Failure_Type')])
+
+testpca1 <- predict(pca1, testsc1[,-ncol(testsc1)])[,1:4]
+testpca1 <- cbind(testpca1, testsc[, c('Target', 'Failure_Type')])
+
+colnames(trainpca1)
+
+
+# t-SNE 시각화
+
+library(Rtsne) 
+library(scatterplot3d)
+par(mfrow=c(2,2))
+
+scatterplot3d(trainsc1[,1:3], pch=16, main = "Original Data")
+
+scatterplot3d(trainpca1[,1:3], pch=16, main = "PCA Data")
+
+# 중복된 행 제거
+unique_trainsc1 <- trainsc[!duplicated(trainsc), ]
+
+# t-SNE 적용 및 시각화 (원본 데이터)
+tsne <- Rtsne(unique_trainsc1[, -((ncol(unique_trainsc1)-1):ncol(unique_trainsc1))], dims = 3)
+scatterplot3d(tsne$Y, pch=16, main = "t-SNE for Original Data")
+
+# 중복된 행 제거
+unique_trainpca1 <- trainpca1[!duplicated(trainpca1), ]
+
+# PCA 후 t-SNE 적용 및 시각화 (PCA 데이터)
+tsnepca <- Rtsne(unique_trainpca1[, -((ncol(unique_trainpca1)-1):ncol(unique_trainpca1))], dims = 3)
+scatterplot3d(tsnepca$Y, pch=16, main = "t-SNE for PCA Data")
 
 ## 2. 고장 예측(+유형 분류) 모델 제작
 
-```{r classify}
+# 2-1. 다중회귀분석
+train_cv <- trainControl(method = "cv", number = 10) 
+library(Metrics)
 
-# 랜덤 포레스트 확인
+evaluate <- function(actual,pred){
+  result <- c(mae(actual,pred), mse(actual,pred), rmse(actual,pred))
+  names(result) <- c('MAE','MSE','RMSE')
+  print(result)
+}
+
+# 다중회귀분석 (Target)
+reg1 <- lm(Target ~., data=trainsc1)
+reg1_1 <- step(reg1, direction='forward', trace=F)
+reg1_2 <- step(reg1, direction='backward', trace=F)
+reg1_3 <- step(reg1, direction='both', trace=F)
+
+evaluate(testsc1$Target, predict(reg1, testsc1))
+evaluate(testsc1$Target, predict(reg1_1, testsc1))
+evaluate(testsc1$Target, predict(reg1_2, testsc1))
+evaluate(testsc1$Target, predict(reg1_3, testsc1))
+
+
+reg1_pc <- lm(Target ~., data=trainpca1)
+reg1_pc1 <- step(reg1_pc, direction='forward', trace=F)
+reg1_pc2 <- step(reg1_pc, direction='backward', trace=F)
+reg1_pc3 <- step(reg1_pc, direction='both', trace=F)
+
+
+evaluate(testsc1$Target, predict(reg1_pc, testpca1))
+evaluate(testsc1$Target, predict(reg1_pc1, testpca1))
+evaluate(testsc1$Target, predict(reg1_pc2, testpca1))
+evaluate(testsc1$Target, predict(reg1_pc3, testpca1))
+
+# 다중회귀분석 (Failure_Type)
+regf1 <- lm(Failure_Type ~., data=trainsc1)
+regf1_1 <- step(reg1, direction='forward', trace=F)
+regf1_2 <- step(reg1, direction='backward', trace=F)
+regf1_3 <- step(reg1, direction='both', trace=F)
+
+evaluate(testsc1$Failure_Type, predict(regf1, testsc1))
+evaluate(testsc1$Failure_Type, predict(regf1_1, testsc1))
+evaluate(testsc1$Failure_Type, predict(regf1_2, testsc1))
+evaluate(testsc1$Failure_Type, predict(regf1_3, testsc1))
+
+
+regf1_pc <- lm(Failure_Type ~., data=trainpca1)
+regf1_pc1 <- step(regf1_pc, direction='forward', trace=F)
+regf1_pc2 <- step(regf1_pc, direction='backward', trace=F)
+regf1_pc3 <- step(regf1_pc, direction='both', trace=F)
+
+
+evaluate(testsc1$Failure_Type, predict(regf1_pc, testpca1))
+evaluate(testsc1$Failure_Type, predict(regf1_pc1, testpca1))
+evaluate(testsc1$Failure_Type, predict(regf1_pc2, testpca1))
+evaluate(testsc1$Failure_Type, predict(regf1_pc3, testpca1))
+
+## Target 예측
+# PCA 데이터보다 원본 데이터를 사용한 모델의 성능이 더 높음을 확인하였음  
+# Target 예측에 있어 원본 데이터를 사용한 모델(reg1=reg1_1=reg1_2=reg1_3)이 가장 좋은 성능을 보임(MAE:0.059 MSE:0.020 RMSE: 0.141)
+## Failure_Type 예측
+
+# PCA 데이터보다 원본 데이터를 사용한 모델의 성능이 더 높음을 확인하였음  
+# Failure_Type 예측에 있어 원본 데이터를 사용한 regf1 모델이 가장 좋은 성능을 보임(MAE:0.081 MSE:0.064 RMSE: 0.253)
+
+# 정규화 회귀분석
+library(glmnet)
+
+regglm <- function(train, alpha){
+  x <- as.matrix(train[,-ncol(train)]); y <- as.matrix(train[,ncol(train)])
+  model <- cv.glmnet(x,y, alpha=alpha)
+  plot(model)
+  return(model)
+}
+
+evalglm <- function(model, test){
+  pred <- predict(model, as.matrix(test[,-ncol(test)]))
+  evaluate(test[,ncol(test)], pred)
+}
+
+lasso1 <- regglm(trainsc1, 1)
+ridge1 <- regglm(trainsc1, 0)
+elastic1 <- regglm(trainsc1, 0.5)
+
+evalglm(lasso1, testsc1)
+evalglm(ridge1, testsc1)
+evalglm(elastic1, testsc1) 
+
+
+lasso_pc1 <- regglm(trainpca1, 1)
+ridge_pc1 <- regglm(trainpca1, 0)
+elastic_pc1 <- regglm(trainpca1, 0.5)
+
+evalglm(lasso_pc1, testpca1)
+evalglm(ridge_pc1, testpca1)
+evalglm(elastic_pc1, testpca1) 
+
+
+# 결과:
+# 데이터에 상관없이 Elastic Net을 사용한 회귀가 가장 좋은 성능을 보였으며
+# 다중회귀분석 결과와 같이 PCA보다 원본 데이터를 활용했을때 더 좋은 성능을 보임을 확인
+
+# 2-2. Support Vector Regression
+# 고장 유형 예측 모델
+
+library(kernlab)
+library(e1071)
+
+# 모델 학습
+train_control <- trainControl(method = "cv", number = 10) 
+
+svm_grid <- expand.grid(.C = c(0.1, 1, 10), .sigma = c(0.01, 0.05, 0.1)) #hyperparameter
+svr <- train(Failure_Type ~ ., data = trainsc1, method = 'svmRadial',
+ trControl = train_control, tuneGrid = svm_grid) 
+
+# 학습 결과
+svr$finalModel
+
+# 성능평가
+pred_svr <- predict(svr$finalModel, as.matrix(testsc1[, -ncol(testsc1)]))
+
+evaluate(testsc1$Failure_Type, pred_svr)
+
+
+
+# 2-3. Random Forest
+# 고장 예측 모델
 library(randomForest)
-library(caret)
 
-install.packages("randomForest")
-install.packages("caret")
-
+# 수치형 -> 범주형
+trainsc1$Type <- as.factor(trainsc1$Type)
+trainsc1$Target <- as.factor(trainsc1$Target)
+trainsc1$Failure_Type <- as.factor(trainsc1$Failure_Type)
+testsc1$Type <- as.factor(testsc1$Type)
+testsc1$Target <- as.factor(testsc1$Target)
+testsc1$Failure_Type <- as.factor(testsc1$Failure_Type)
 
 # 랜덤 포레스트 모델 학습
 model_rf <- randomForest(Target ~ Air_temperature_K + Process_temperature_K + 
-                         Rotational_speed_rpm + Torque_Nm + Tool_wear_min + Type,
-                         data = dat, importance = TRUE)
+                         Rotational_speed_rpm + Torque_Nm + Tool_wear_min + Type + Failure_Type,
+                         data = trainsc1, importance = TRUE)
+
 # 모델 요약
 print(model_rf)
 
 # 모델 예측
-predictions <- predict(model_rf, newdata = datTest)
+predictions <- predict(model_rf, newdata = testsc1)
 
 # 혼동 행렬 생성
-confMat <- confusionMatrix(predictions, datTest$Target)
+confMat <- confusionMatrix(predictions, testsc1$Target)
 print(confMat)
 
 # 변수 중요도 시각화
@@ -491,27 +655,18 @@ control <- trainControl(method="repeatedcv", number=10, repeats=3)
 tuneGrid <- expand.grid(.mtry=c(2:5))
 
 rf_tuned <- train(Target ~ Air_temperature_K + Process_temperature_K + 
-                  Rotational_speed_rpm + Torque_Nm + Tool_wear_min + Type,
-                  data = datTrain, method = "rf", trControl = control, tuneGrid = tuneGrid)
+                  Rotational_speed_rpm + Torque_Nm + Tool_wear_min + Type + Failure_Type,
+                  data = trainsc1, method = "rf", trControl = control, tuneGrid = tuneGrid)
 
 # 최적 모델 확인
 print(rf_tuned)
 
 # 최적 모델로 예측 및 평가
-predictions_tuned <- predict(rf_tuned, newdata = datTest)
-confMat_tuned <- confusionMatrix(predictions_tuned, datTest$Target)
+predictions_tuned <- predict(rf_tuned, newdata = testsc1)
+confMat_tuned <- confusionMatrix(predictions_tuned, testsc1$Target)
 print(confMat_tuned)
 
 
+
+
 ```
-
-
-# 2-1. Random Forest
-
-# 2-2. SVM
-
-# 2-3. ???
-
-
-## 3. 모델 평가 및 개선
-
