@@ -7,19 +7,33 @@ output: html_document
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
+
+library(randomForest)
+library(ggplot2)
+library(gridExtra)
+library(dplyr)
+library(caret)
+library(corrplot)
+library(kernlab)
+library(e1071)
+library(glmnet)
+library(Rtsne) 
+library(scatterplot3d)
+library(Metrics)
+
 ```
 
 ## [데이터 분석 개요]
-### 1. 대상 데이터: 밀링 기계 데이터셋
+### 대상 데이터: 밀링 기계 데이터셋
 (https://www.kaggle.com/datasets/shivamb/machine-predictive-maintenance-classification)
 
 - UID : 1~10000 범위의 고유 식별자
 - product ID : 제품 일련번호
 - Type : 제품 품질 (H, M, L)
-- Air temperature : 
-- Process temperature :
-- Rotational speed : RPM
-- Torque : 토그 값
+- Air temperature : 공기 온도
+- Process temperature : 공정 온도
+- Rotational speed : TOOL RPM 
+- Torque : 토그 값 (양수값)
 - Tool wear : Tool 마모(사용시간), 생산된 제품 품질마다 시간 구분 (H:5min, M:3min, L:2min)
 - Target : Failure or Not
 - Failure Type : Tpye of Failure
@@ -53,10 +67,6 @@ dat$Target <- as.character(dat$Target)
 table(is.na(dat))
 
 # 데이터 시각화
-library(ggplot2)
-library(gridExtra)
-library(dplyr)
-
 # Type Column Data
 table(dat$Type)
 
@@ -116,6 +126,7 @@ g_tool_wear <- visualize(dat[,6]) + xlab(colnames(dat)[6])
 
 grid.arrange(g_air_temp, g_proc_temp, g_rpm, g_torq, g_tool_wear, ncol = 3)
 ```
+
 ### 2. 가설 설정 및 검정
 ```{r hypothesis}
 
@@ -222,7 +233,8 @@ summary(anova_tw)
        y = "Tool wear") +
   theme_minimal() }
 
-
+## 1. 제품 별 품질타입 L,M,H(각각 50,30,20%)의 차이 분석 요약: 
+# 제품 별 품질타입 L,M,H에 따라 평균에 유의미한 차이를 보이는 변수가 없었음.
 
 ## 2. 양호/고장발생 그룹간 차이 분석
 
@@ -405,9 +417,17 @@ print(f_test_tw)
        y = "Tool wear") +
   theme_minimal() }
 
+## 2. 양호/고장발생 그룹간 차이 분석 요약:
+# Air_temperature: 평균차이O, 분산차이X
+# Process_temperature: 평균차이O, 분산차이O
+# Rotational_Speed: 평균차이O, 분산차이O
+# Torque: 평균차이O, 분산차이O
+# Tool wear: 평균차이O, 분산차이O
+# 거의 모든 변수에서 양호/고장발생 그룹간 평균 차이가 있었고, 분산 차이도 있었음.
+
 ```
 
-### 3. 모델 생성
+### 3. 모델링 및 결과
 ```{r model}
 # 범주형 데이터 -> 수치형 데이터로 
 dat$Type <- as.numeric(factor(dat$Type))
@@ -417,27 +437,25 @@ unique(dat$Failure_Type)
 unique(dat$Target)
 unique(dat$Type)
 
-
-library(caret)
+#Failure_Type 삭제
+#Model Train 과정에서 해당 Feature를 기준으로 결과를 예측하게되므로 제거 진행.
+dat1 <- dat[,-c(8)]
+unique(dat$Target)
 
 # 트레인, 테스트셋 분할
 set.seed(0)
-trainidx <- sample(1:nrow(dat), 0.7*nrow(dat))
-trainset <- dat[trainidx,]
-testset <- dat[-trainidx,]
+trainidx <- sample(1:nrow(dat1), 0.7*nrow(dat1))
+trainset <- dat1[trainidx,]
+testset <- dat1[-trainidx,]
+
 
 # 표준화
-# Target과 Failure_Type 종속 변수로 설정
-depidx <- (ncol(trainset)-1):ncol(trainset)
-scaling <- preProcess(trainset[, -depidx], method = c("center", "scale"))
+# Target을 종속 변수로 설정
+scaling <- preProcess(trainset, method = c("center", "scale"))
 
-traintarget <- trainset[,depidx]
-trainsc <- predict(scaling, trainset[, -depidx])
-trainsc <- cbind(trainsc, traintarget)
+trainsc <- predict(scaling, trainset)
 
-testtarget <- testset[,depidx]
-testsc <- predict(scaling, testset[, -depidx])
-testsc <- cbind(testsc, testtarget)
+testsc <- predict(scaling, testset)
 
 # 상관 행렬 계산 및 시각화
 numeric_columns <- sapply(trainsc, is.numeric)
@@ -446,15 +464,12 @@ testsc1 <- testsc[, numeric_columns]
 colnames(trainsc)
 
 # 변수간 상관계수 도출(히트맵)
-library(corrplot)
 par(mfrow=c(1,1))
 corr <- cor(trainsc1, method='pearson')
 col <- colorRampPalette(c('white','blue'))
 corrplot(abs(corr), method='color', col=col(200), type='upper',tl.cex = 0.5, tl.col='black')
 
-# 2. 특징 추출 및 차원 축소
-
-
+## 차원 축소
 # PCA 
 
 pca1 <- prcomp(trainsc1[, -ncol(trainsc1)])
@@ -462,43 +477,17 @@ summary(pca1) #최적 주성분 4개
 
 pca1 <- preProcess(trainsc1[, -ncol(trainsc1)], method = 'pca')
 trainpca1 <- predict(pca1, trainsc1[,-ncol(trainsc1)])[,1:4]
-trainpca1 <- cbind(trainpca1, trainsc[, c('Target', 'Failure_Type')])
+trainpca1 <- cbind(trainpca1, Target = trainsc1[, 'Target'])
 
 testpca1 <- predict(pca1, testsc1[,-ncol(testsc1)])[,1:4]
-testpca1 <- cbind(testpca1, testsc[, c('Target', 'Failure_Type')])
+testpca1 <- cbind(testpca1, Target = testsc1[, 'Target'])
 
 colnames(trainpca1)
 
 
-# t-SNE 시각화
-
-library(Rtsne) 
-library(scatterplot3d)
-par(mfrow=c(2,2))
-
-scatterplot3d(trainsc1[,1:3], pch=16, main = "Original Data")
-
-scatterplot3d(trainpca1[,1:3], pch=16, main = "PCA Data")
-
-# 중복된 행 제거
-unique_trainsc1 <- trainsc[!duplicated(trainsc), ]
-
-# t-SNE 적용 및 시각화 (원본 데이터)
-tsne <- Rtsne(unique_trainsc1[, -((ncol(unique_trainsc1)-1):ncol(unique_trainsc1))], dims = 3)
-scatterplot3d(tsne$Y, pch=16, main = "t-SNE for Original Data")
-
-# 중복된 행 제거
-unique_trainpca1 <- trainpca1[!duplicated(trainpca1), ]
-
-# PCA 후 t-SNE 적용 및 시각화 (PCA 데이터)
-tsnepca <- Rtsne(unique_trainpca1[, -((ncol(unique_trainpca1)-1):ncol(unique_trainpca1))], dims = 3)
-scatterplot3d(tsnepca$Y, pch=16, main = "t-SNE for PCA Data")
-
-## 2. 고장 예측(+유형 분류) 모델 제작
-
-# 2-1. 다중회귀분석
+## 고장 예측(+유형 분류) 모델 제작
+# 다중회귀분석
 train_cv <- trainControl(method = "cv", number = 10) 
-library(Metrics)
 
 evaluate <- function(actual,pred){
   result <- c(mae(actual,pred), mse(actual,pred), rmse(actual,pred))
@@ -529,40 +518,13 @@ evaluate(testsc1$Target, predict(reg1_pc1, testpca1))
 evaluate(testsc1$Target, predict(reg1_pc2, testpca1))
 evaluate(testsc1$Target, predict(reg1_pc3, testpca1))
 
-# 다중회귀분석 (Failure_Type)
-regf1 <- lm(Failure_Type ~., data=trainsc1)
-regf1_1 <- step(reg1, direction='forward', trace=F)
-regf1_2 <- step(reg1, direction='backward', trace=F)
-regf1_3 <- step(reg1, direction='both', trace=F)
 
-evaluate(testsc1$Failure_Type, predict(regf1, testsc1))
-evaluate(testsc1$Failure_Type, predict(regf1_1, testsc1))
-evaluate(testsc1$Failure_Type, predict(regf1_2, testsc1))
-evaluate(testsc1$Failure_Type, predict(regf1_3, testsc1))
-
-
-regf1_pc <- lm(Failure_Type ~., data=trainpca1)
-regf1_pc1 <- step(regf1_pc, direction='forward', trace=F)
-regf1_pc2 <- step(regf1_pc, direction='backward', trace=F)
-regf1_pc3 <- step(regf1_pc, direction='both', trace=F)
-
-
-evaluate(testsc1$Failure_Type, predict(regf1_pc, testpca1))
-evaluate(testsc1$Failure_Type, predict(regf1_pc1, testpca1))
-evaluate(testsc1$Failure_Type, predict(regf1_pc2, testpca1))
-evaluate(testsc1$Failure_Type, predict(regf1_pc3, testpca1))
-
-## Target 예측
-# PCA 데이터보다 원본 데이터를 사용한 모델의 성능이 더 높음을 확인하였음  
-# Target 예측에 있어 원본 데이터를 사용한 모델(reg1=reg1_1=reg1_2=reg1_3)이 가장 좋은 성능을 보임(MAE:0.059 MSE:0.020 RMSE: 0.141)
-## Failure_Type 예측
-
-# PCA 데이터보다 원본 데이터를 사용한 모델의 성능이 더 높음을 확인하였음  
-# Failure_Type 예측에 있어 원본 데이터를 사용한 regf1 모델이 가장 좋은 성능을 보임(MAE:0.081 MSE:0.064 RMSE: 0.253)
+# PCA 데이터보다 원본 데이터를 사용한 모델이 더 나은 성능을 보임
+# pca 데이터셋 모델이 MAE 값에서 약간 더 낮은 값을 보이나 mse와 rsme 값에서는 원 데이터셋 모델이 더 낮은 값을 보임
+# reg1,reg1_1,reg1_2,reg1_3 -> 모든 모델이 거의 동일한 값을 가짐 (MAE:0.417 MSE:0.859 RMSE: 0.927)
+# pca를 통하여 차원을 줄였으나 오히려 성능을 저하는 시키는 결과를 야기함 
 
 # 정규화 회귀분석
-library(glmnet)
-
 regglm <- function(train, alpha){
   x <- as.matrix(train[,-ncol(train)]); y <- as.matrix(train[,ncol(train)])
   model <- cv.glmnet(x,y, alpha=alpha)
@@ -594,20 +556,17 @@ evalglm(elastic_pc1, testpca1)
 
 
 # 결과:
-# 데이터에 상관없이 Elastic Net을 사용한 회귀가 가장 좋은 성능을 보였으며
+# 원 데이터셋에서는 Ridge 및 Elastic Net 모델이 약간 더 좋은 성능을 보였지만, 성능 차이는 매우 미미함
+# PCA 데이터셋에서는 모든 모델의 성능이 동일하였지만 원데이터셋 모델보다 성능이 저조하였음
 # 다중회귀분석 결과와 같이 PCA보다 원본 데이터를 활용했을때 더 좋은 성능을 보임을 확인
 
-# 2-2. Support Vector Regression
+# Support Vector Regression
 # 고장 유형 예측 모델
-
-library(kernlab)
-library(e1071)
-
 # 모델 학습
 train_control <- trainControl(method = "cv", number = 10) 
 
 svm_grid <- expand.grid(.C = c(0.1, 1, 10), .sigma = c(0.01, 0.05, 0.1)) #hyperparameter
-svr <- train(Failure_Type ~ ., data = trainsc1, method = 'svmRadial',
+svr <- train(Target ~ ., data = trainsc1, method = 'svmRadial',
  trControl = train_control, tuneGrid = svm_grid) 
 
 # 학습 결과
@@ -616,25 +575,22 @@ svr$finalModel
 # 성능평가
 pred_svr <- predict(svr$finalModel, as.matrix(testsc1[, -ncol(testsc1)]))
 
-evaluate(testsc1$Failure_Type, pred_svr)
+evaluate(testsc1$Target, pred_svr)
 
 
 
-# 2-3. Random Forest
+# Random Forest
 # 고장 예측 모델
-library(randomForest)
 
 # 수치형 -> 범주형
 trainsc1$Type <- as.factor(trainsc1$Type)
 trainsc1$Target <- as.factor(trainsc1$Target)
-trainsc1$Failure_Type <- as.factor(trainsc1$Failure_Type)
 testsc1$Type <- as.factor(testsc1$Type)
 testsc1$Target <- as.factor(testsc1$Target)
-testsc1$Failure_Type <- as.factor(testsc1$Failure_Type)
 
 # 랜덤 포레스트 모델 학습
 model_rf <- randomForest(Target ~ Air_temperature_K + Process_temperature_K + 
-                         Rotational_speed_rpm + Torque_Nm + Tool_wear_min + Type + Failure_Type,
+                         Rotational_speed_rpm + Torque_Nm + Tool_wear_min + Type,
                          data = trainsc1, importance = TRUE)
 
 # 모델 요약
@@ -655,7 +611,7 @@ control <- trainControl(method="repeatedcv", number=10, repeats=3)
 tuneGrid <- expand.grid(.mtry=c(2:5))
 
 rf_tuned <- train(Target ~ Air_temperature_K + Process_temperature_K + 
-                  Rotational_speed_rpm + Torque_Nm + Tool_wear_min + Type + Failure_Type,
+                  Rotational_speed_rpm + Torque_Nm + Tool_wear_min + Type,
                   data = trainsc1, method = "rf", trControl = control, tuneGrid = tuneGrid)
 
 # 최적 모델 확인
